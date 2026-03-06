@@ -1,0 +1,76 @@
+cache_resources:
+  - label: auth_token_cache
+    memory:
+      default_ttl: 5m
+
+input:
+  generate:
+    interval: 5s
+    mapping: 'root = {}'
+
+pipeline:
+  processors:
+    # Attempt to read token from cache (content becomes token string)
+    - cache:
+        resource: auth_token_cache
+        operator: get
+        key: token
+
+    - log:
+        level: INFO
+        message: ${! "After cache get, content len " + content().string().length().string() }
+
+    # If cache miss/expired -> fetch new token -> cache it -> set content(token)
+    - catch:
+        - processors:
+            - http:
+                url: http://127.0.0.1:5000/token
+                verb: POST
+                headers:
+                  X-Client-Id: demo
+                  X-Client-Secret: demo
+                timeout: 10s
+
+            - bloblang: |
+                root = this.access_token.string()
+                #meta tok = this.access_token
+                #root = meta("tok")
+
+            - log:
+                level: INFO
+                message: ${! "Fetched token prefix " + content().string().slice(0,8) }
+            - cache:
+                resource: auth_token_cache
+                operator: set
+                key: token
+                value: ${! content().string() }
+                ttl: 1m
+
+    # Call protected endpoint using token in content()
+    - log:
+        level: INFO
+        message: ${! "using token prefix " + content().string().slice(0,8) }
+
+    - http:
+        url: http://127.0.0.1:5000/data
+        verb: GET
+        headers:
+          Authorization: ${! "Bearer " + content().string() }
+        timeout: 10s
+
+    # If unauthorized, clear cache and fail this cycle
+    - switch:
+        - check: meta("http_status_code") == 401
+          processors:
+            - cache:
+                resource: auth_token_cache
+                operator: delete
+                key: token
+            - log:
+                level: WARN
+                message: "401 from /data cleared cached token"
+            - bloblang: |
+                root = deleted()
+
+output:
+  stdout: {}
