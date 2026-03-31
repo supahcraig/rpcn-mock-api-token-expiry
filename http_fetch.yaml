@@ -1,7 +1,7 @@
 cache_resources:
   - label: auth_token_cache
     memory:
-      default_ttl: 5m
+      default_ttl: 1m
 
 input:
   generate:
@@ -33,8 +33,6 @@ pipeline:
 
             - bloblang: |
                 root = this.access_token.string()
-                #meta tok = this.access_token
-                #root = meta("tok")
 
             - log:
                 level: INFO
@@ -44,7 +42,7 @@ pipeline:
                 operator: set
                 key: token
                 value: ${! content().string() }
-                ttl: 1m
+                ttl: 30s
 
     # Call protected endpoint using token in content()
     - log:

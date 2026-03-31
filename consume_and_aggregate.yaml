@@ -38,7 +38,7 @@ pipeline:
 output:
   kafka_franz:
     seed_brokers:
-      - seed-6234e08e.curl3eo533cmsnt23dv0.byoc.prd.cloud.redpanda.com:9092
+      - ${REDPANDA_BROKERS}
     topic: iot_aggregated
 
     tls:
